@@ -8,6 +8,36 @@
   backdrop-filter: var(--Surface__backdrop-filter);
 }
 
+/* Mobile responsive navigation */
+@media (max-width: 768px) {
+  .root {
+    display: flex;
+    position: relative;
+    flex-wrap: nowrap;
+    align-items: center;
+    justify-content: space-between;
+    max-inline-size: 100%;
+    padding: 0;
+    overflow-x: auto;
+    scrollbar-width: none; /* Hide scrollbar on Firefox */
+    -webkit-overflow-scrolling: touch; /* For smooth scrolling on iOS */
+  }
+
+  .root::-webkit-scrollbar {
+    display: none; /* Hide scrollbar on Chrome/Safari */
+  }
+
+  .item {
+    flex: 0 0 auto;
+    margin: 0;
+  }
+
+  .item + .item {
+    border-inline-start: var(--separator-border);
+    border-block-start: none;
+  }
+}
+
 .item + .item {
   border-block-start: var(--separator-border);
 }
@@ -26,6 +56,23 @@
   &.isActive {
     color: var(--text-color);
     background-color: var(--primary-l1);
+  }
+}
+
+/* Mobile responsive links */
+@media (max-width: 768px) {
+  .link {
+    justify-content: center;
+    padding-inline: 0.75rem;
+  }
+
+  .label {
+    display: none; /* Hide text labels on mobile */
+  }
+
+  .icon {
+    inline-size: 1.5rem;
+    block-size: 1.5rem;
   }
 }
 
@@ -54,6 +101,19 @@
   &.isActive {
     color: var(--text-color);
     background-color: var(--primary-l1);
+  }
+}
+
+/* Mobile responsive account link */
+@media (max-width: 768px) {
+  .accountLink {
+    flex-direction: row;
+    padding-inline: 0.5rem;
+    padding-block: 0.25rem;
+  }
+
+  .userName {
+    display: none; /* Hide username on mobile */
   }
 }
 

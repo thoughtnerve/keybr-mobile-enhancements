@@ -27,6 +27,14 @@
   cursor: pointer;
 }
 
+/* Mobile responsive buttons */
+@media (max-width: 768px) {
+  .root {
+    min-inline-size: 6rem;
+    padding-inline: 0.75rem;
+  }
+}
+
 .root:focus-visible {
   color: var(--Button--focused__color);
   background-color: var(--Button--focused__background-color);

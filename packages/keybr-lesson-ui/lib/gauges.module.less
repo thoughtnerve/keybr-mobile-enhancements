@@ -1,9 +1,24 @@
 .gaugeList {
   display: flex;
+  flex-wrap: wrap;
   gap: 1rem;
   align-items: center;
 }
 
 .gauge {
   min-inline-size: 5rem;
+  margin-block: 0.25rem;
+}
+
+/* Mobile responsive metrics */
+@media (max-width: 768px) {
+  .gaugeList {
+    gap: 1.5rem;
+    justify-content: space-between;
+  }
+
+  .gauge {
+    min-inline-size: auto;
+    margin-inline-end: 0.5rem;
+  }
 }

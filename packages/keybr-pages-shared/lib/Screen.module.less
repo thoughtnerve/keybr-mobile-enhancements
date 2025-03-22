@@ -1,7 +1,27 @@
 .screen {
   position: relative;
-  min-inline-size: 60rem;
   max-inline-size: 70rem;
   margin-inline: auto;
   margin-block: 2rem;
+}
+
+/* Desktop screens */
+@media (min-width: 769px) {
+  .screen {
+    min-inline-size: 60rem;
+  }
+}
+
+/* Mobile screens */
+@media (max-width: 768px) {
+  .screen {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    box-sizing: border-box;
+    inline-size: 100%;
+    margin-inline: auto; /* Center content */
+    margin-block: 1rem;
+    padding-inline: 1rem;
+  }
 }

@@ -9,3 +9,18 @@
 .frame {
   fill: var(--Keyboard-frame__color);
 }
+
+/* Mobile responsive keyboard */
+@media (max-width: 768px) {
+  .keyboard {
+    max-inline-size: 100%;
+    overflow-x: auto;
+    overflow-y: hidden;
+    scrollbar-width: none; /* Hide scrollbar on Firefox */
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .keyboard::-webkit-scrollbar {
+    display: none; /* Hide scrollbar on Chrome/Safari */
+  }
+}

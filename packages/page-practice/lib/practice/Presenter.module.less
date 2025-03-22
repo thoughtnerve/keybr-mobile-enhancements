@@ -15,3 +15,24 @@
 .keyboard {
   margin-block-start: 3rem;
 }
+
+/* Mobile responsive styles */
+@media (max-width: 768px) {
+  .textInput_normal {
+    margin-block-start: 1.5rem;
+  }
+
+  .textInput_compact,
+  .textInput_bare {
+    margin-inline: 0;
+    margin-block-start: 1.5rem;
+    padding-block-start: 0;
+  }
+
+  .keyboard {
+    display: none; /* Hide keyboard on mobile */
+    max-inline-size: 100%;
+    margin-block-start: 1.5rem;
+    overflow-x: auto;
+  }
+}
