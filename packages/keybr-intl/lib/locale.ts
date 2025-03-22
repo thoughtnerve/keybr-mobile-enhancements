@@ -25,6 +25,7 @@ export const defaultLocale: LocaleId = "en";
 
 export const allLocales: readonly LocaleId[] = [
   defaultLocale,
+  "af",
   "ar",
   "bg",
   "ca",
@@ -61,6 +62,7 @@ export const allLocales: readonly LocaleId[] = [
   "vi",
   "zh-hans",
   "zh-hant",
+  "zh-tw",
 ];
 
 export function getDir(locale: LocaleId): "ltr" | "rtl" {

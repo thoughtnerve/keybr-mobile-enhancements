@@ -2,6 +2,7 @@ export const defaultLocale = "en";
 
 export const allLocales = [
   defaultLocale,
+  "af",
   "ar",
   "bg",
   "ca",
@@ -38,4 +39,5 @@ export const allLocales = [
   "vi",
   "zh-hans",
   "zh-hant",
+  "zh-tw",
 ];
