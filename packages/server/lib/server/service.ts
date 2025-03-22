@@ -33,7 +33,7 @@ export class Service {
       res.shouldKeepAlive = false;
       callback(req, res);
     });
-    this.#server.listen(port);
+    this.#server.listen(port, "0.0.0.0");
     process.on("SIGINT", () => {
       this.stop();
     });
