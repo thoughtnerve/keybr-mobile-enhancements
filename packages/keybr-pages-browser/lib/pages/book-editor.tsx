@@ -136,6 +136,27 @@ const styles = {
   }
 };
 
+// Add styles for the reorder buttons
+const arrowButtonStyle = {
+  padding: "4px 6px",
+  margin: "0 2px",
+  backgroundColor: "var(--accent)",
+  color: "var(--primary-l2)",
+  border: "none",
+  borderRadius: "4px",
+  cursor: "pointer",
+  fontSize: "12px",
+  width: "30px",
+  height: "30px",
+  display: "flex",
+  alignItems: "center", 
+  justifyContent: "center",
+  disabled: {
+    opacity: 0.5,
+    cursor: "not-allowed"
+  }
+};
+
 export default function BookEditorPage(): React.ReactNode {
   const [selectedBookId, setSelectedBookId] = useState<string | null>(null);
   const [bookContent, setBookContent] = useState<any | null>(null);
@@ -147,21 +168,23 @@ export default function BookEditorPage(): React.ReactNode {
   const [newChapterTitle, setNewChapterTitle] = useState("");
   const [saveSuccess, setSaveSuccess] = useState(false);
   const [deleteSuccess, setDeleteSuccess] = useState(false);
+  const [reorderSuccess, setReorderSuccess] = useState<string | null>(null);
   const [showConfirmDelete, setShowConfirmDelete] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const [shouldCleanText, setShouldCleanText] = useState(true);
 
   // Reset success messages after 3 seconds
   useEffect(() => {
-    if (saveSuccess || deleteSuccess) {
+    if (saveSuccess || deleteSuccess || reorderSuccess) {
       const timer = setTimeout(() => {
         setSaveSuccess(false);
         setDeleteSuccess(false);
+        setReorderSuccess(null);
       }, 3000);
       return () => clearTimeout(timer);
     }
     return undefined;
-  }, [saveSuccess, deleteSuccess]);
+  }, [saveSuccess, deleteSuccess, reorderSuccess]);
 
   const fetchBookContent = useCallback(async (bookId: string) => {
     try {
@@ -523,6 +546,91 @@ export default function BookEditorPage(): React.ReactNode {
     setShowConfirmDelete(false);
   }, []);
 
+  // Add handlers for moving chapters up and down
+  const handleMoveChapter = useCallback(async (direction: "up" | "down") => {
+    if (selectedBookId === null || currentChapterIndex === null) {
+      console.log("Cannot move chapter - no book or chapter selected", { selectedBookId, currentChapterIndex });
+      return;
+    }
+
+    try {
+      setSaving(true);
+      console.log(`Moving chapter ${currentChapterIndex} ${direction}`, { 
+        bookContent,
+        chapter: bookContent?.content?.[currentChapterIndex],
+        contentLength: bookContent?.content?.length
+      });
+      
+      const response = await fetch(`/_/books/${selectedBookId}/chapter/${currentChapterIndex}/reorder`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ direction }),
+      });
+
+      const responseText = await response.text();
+      console.log("Raw server response:", responseText);
+      
+      let result;
+      try {
+        result = JSON.parse(responseText);
+      } catch (e) {
+        console.error("Failed to parse server response", e);
+        throw new Error("Invalid server response");
+      }
+
+      if (!response.ok) {
+        console.error("Server returned error", result);
+        throw new Error(`Failed to reorder chapter: ${response.statusText}`);
+      }
+
+      console.log("Reorder result:", result);
+      
+      if (result.success) {
+        // Update the book content with the new order
+        if (result.content) {
+          const updatedContent = {
+            ...bookContent,
+            content: result.content
+          };
+          console.log("Updating book content:", updatedContent);
+          setBookContent(updatedContent);
+          
+          // Update the current chapter index to follow the moved chapter
+          if (result.newIndex !== undefined) {
+            console.log(`Setting current chapter index to ${result.newIndex}`);
+            setCurrentChapterIndex(result.newIndex);
+            
+            // Update form with the moved chapter content
+            if (result.content && result.content[result.newIndex]) {
+              const chapter = result.content[result.newIndex];
+              setEditedTitle(chapter[0] || '');
+              
+              if (Array.isArray(chapter[1])) {
+                setEditedText(chapter[1].join('\n\n'));
+              } else {
+                setEditedText('');
+              }
+              console.log(`Updated form with chapter content: ${chapter[0]}`);
+            }
+          }
+          
+          // Show success message specific to reordering
+          setReorderSuccess(`Chapter moved ${direction} successfully!`);
+        } else {
+          console.error("Server returned success but no content", result);
+        }
+      } else {
+        console.error("Operation failed on server", result);
+      }
+    } catch (error) {
+      console.error("Error moving chapter:", error);
+    } finally {
+      setSaving(false);
+    }
+  }, [selectedBookId, currentChapterIndex, bookContent]);
+
   useEffect(() => {
     // Load the selected book data when component mounts or book changes
     if (selectedBookId) {
@@ -534,7 +642,7 @@ export default function BookEditorPage(): React.ReactNode {
   // Return the JSX for the component
   return (
     <div style={styles.container}>
-      <h1 style={styles.header}>Book Editor</h1>
+      <h1 style={styles.header}>Document Editor</h1>
       
       {/* Success Messages */}
       {saveSuccess && (
@@ -549,9 +657,15 @@ export default function BookEditorPage(): React.ReactNode {
         </div>
       )}
       
+      {reorderSuccess && (
+        <div style={styles.successMessage}>
+          {reorderSuccess}
+        </div>
+      )}
+      
       {/* Book Selection and Add Chapter Button */}
       <div style={styles.bookSelectGroup}>
-        <label style={styles.label} htmlFor="book-select">Select a book:</label>
+        <label style={styles.label} htmlFor="book-select">Select a document:</label>
         <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
           <select 
             id="book-select"
@@ -559,7 +673,7 @@ export default function BookEditorPage(): React.ReactNode {
             value={selectedBookId || ''}
             onChange={handleBookSelect}
           >
-            <option value="" disabled>Choose a book</option>
+            <option value="" disabled>Choose a document</option>
             {Array.from(Book.ALL).map((book) => (
               <option key={book.id} value={book.id}>
                 {book.title}
@@ -578,7 +692,7 @@ export default function BookEditorPage(): React.ReactNode {
         </div>
       </div>
       
-      {/* Chapter Selection and Delete Button */}
+      {/* Chapter Selection and Reordering */}
       {selectedBookId && bookContent && (
         <div style={styles.formGroup}>
           <label style={{...styles.label, marginTop: "0"}} htmlFor="chapter-select">Chapter:</label>
@@ -597,6 +711,43 @@ export default function BookEditorPage(): React.ReactNode {
                 </option>
               ))}
             </select>
+            
+            {/* Reorder Buttons */}
+            {currentChapterIndex !== null && (
+              <div style={{ display: "flex", alignItems: "center" }}>
+                <button
+                  type="button"
+                  style={{
+                    ...arrowButtonStyle,
+                    ...(currentChapterIndex === 0 ? arrowButtonStyle.disabled : {})
+                  }}
+                  onClick={() => {
+                    console.log("Move UP button clicked", { currentChapterIndex, selectedBookId });
+                    handleMoveChapter("up");
+                  }}
+                  disabled={currentChapterIndex === 0 || saving}
+                  title="Move chapter up"
+                >
+                  ↑
+                </button>
+                <button
+                  type="button"
+                  style={{
+                    ...arrowButtonStyle,
+                    ...(currentChapterIndex === (bookContent?.content?.length - 1) ? arrowButtonStyle.disabled : {})
+                  }}
+                  onClick={() => {
+                    console.log("Move DOWN button clicked", { currentChapterIndex, selectedBookId });
+                    handleMoveChapter("down");
+                  }}
+                  disabled={currentChapterIndex === (bookContent?.content?.length - 1) || saving}
+                  title="Move chapter down"
+                >
+                  ↓
+                </button>
+              </div>
+            )}
+            
             {currentChapterIndex !== null && (
               <button 
                 type="button" 

@@ -8,7 +8,7 @@ export class Book implements EnumItem {
   static readonly EN_ALICE_WONDERLAND = new Book(
     /* id= */ "en-alice-wonderland",
     /* language= */ Language.EN,
-    /* title= */ "Alice’s Adventures in Wonderland",
+    /* title= */ "Alice's Adventures in Wonderland",
     /* author= */ "Lewis Carroll",
     /* coverImage= */ coverImageAliceWonderland,
   );
@@ -29,10 +29,19 @@ export class Book implements EnumItem {
     /* coverImage= */ coverImageCallWild,
   );
 
+  static readonly EN_MY_DOCUMENT = new Book(
+    /* id= */ "en-my-document",
+    /* language= */ Language.EN,
+    /* title= */ "My Document",
+    /* author= */ "User",
+    /* coverImage= */ coverImageAliceWonderland,
+  );
+
   static readonly ALL = new Enum<Book>(
     Book.EN_ALICE_WONDERLAND,
     Book.EN_JEKYLL_HYDE,
     Book.EN_CALL_WILD,
+    Book.EN_MY_DOCUMENT,
   );
 
   private constructor(

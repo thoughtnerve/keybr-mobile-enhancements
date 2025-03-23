@@ -52,6 +52,15 @@ const PAddChapter = zod(TAddChapter, () => {
   throw new ApplicationError("Invalid chapter creation data");
 });
 
+// Define schema for reordering chapters
+const TReorderChapter = z.object({
+  direction: z.enum(["up", "down"])
+});
+type TReorderChapter = z.infer<typeof TReorderChapter>;
+const PReorderChapter = zod(TReorderChapter, () => {
+  throw new ApplicationError("Invalid reorder direction");
+});
+
 // BookContent type definition
 type BookContent = Array<[string, string[]]>;
 type MockContentMap = {
@@ -60,6 +69,15 @@ type MockContentMap = {
 
 // Initialize empty mock content store
 const mockContent: MockContentMap = {};
+
+// Define type for consistent response structure
+type ResponseDTO = {
+  success: boolean;
+  content?: any;
+  message: string;
+  newIndex?: number;
+  remainingChapters?: number;
+}
 
 @injectable()
 @controller("/_/books")
@@ -702,6 +720,90 @@ export class Controller {
     } catch (error) {
       console.error(`Error restoring from backup:`, error);
       throw new ApplicationError(`Failed to restore from backup: ${error instanceof Error ? error.message : String(error)}`);
+    }
+  }
+
+  // Add helper method to get the file path for a book content
+  private getContentFilePath(id: string): string {
+    return path.join(this.dataDir, `${id}.json`);
+  }
+
+  @http.POST("/{id}/chapter/{index}/reorder")
+  async reorderChapter(
+    @pathParam("id") id: string,
+    @pathParam("index") index: number,
+    @body.json(PReorderChapter, jsonOpts) { direction }: TReorderChapter,
+  ): Promise<ResponseDTO> {
+    try {
+      console.log(`Received reorder request for book ${id}, chapter ${index}, direction ${direction}`);
+      
+      // Load the latest content from file
+      await this.initializeContentFromFile(id);
+      
+      // Get the current content from store
+      const bookContent = Controller.mockContentStore[id];
+      console.log(`Book content retrieved from store for ${id}:`, { 
+        isArray: Array.isArray(bookContent),
+        length: bookContent?.length,
+        firstChapter: bookContent?.[0]?.[0] // Log first chapter title for verification
+      });
+      
+      if (!bookContent || !Array.isArray(bookContent)) {
+        console.error(`Book content not found or not array for ${id}`);
+        throw new ApplicationError("Book content not found");
+      }
+      
+      // Calculate new index based on direction
+      let newIndex: number;
+      if (direction === "up") {
+        newIndex = Math.max(0, index - 1);
+      } else {
+        newIndex = Math.min(bookContent.length - 1, index + 1);
+      }
+      
+      console.log(`Calculated new index: ${newIndex} (current: ${index}, direction: ${direction}, total chapters: ${bookContent.length})`);
+      
+      // Don't do anything if we're already at the edge
+      if (newIndex === index) {
+        console.log(`Chapter already at the ${direction} edge, no change needed`);
+        return { success: true, content: bookContent, message: "Chapter already at the edge" };
+      }
+      
+      console.log(`Reordering chapter ${index} to position ${newIndex}`);
+      console.log(`Before swap - Chapter ${index}: "${bookContent[index]?.[0]}", Chapter ${newIndex}: "${bookContent[newIndex]?.[0]}"`);
+      
+      // Create a backup before modifying the content
+      await this.manageBackup(this.getContentFilePath(id));
+      
+      // Move the chapter by swapping elements
+      const temp = bookContent[index];
+      bookContent[index] = bookContent[newIndex];
+      bookContent[newIndex] = temp;
+      
+      console.log(`After swap - Chapter ${index}: "${bookContent[index]?.[0]}", Chapter ${newIndex}: "${bookContent[newIndex]?.[0]}"`);
+      
+      // Save the updated content
+      const contentFilePath = this.getContentFilePath(id);
+      try {
+        console.log(`Writing updated content with ${bookContent.length} chapters to file ${contentFilePath}`);
+        const jsonString = JSON.stringify(bookContent, null, 2);
+        await fs.promises.writeFile(contentFilePath, jsonString, 'utf8');
+        console.log(`Chapter reordered successfully. Moved from ${index} to ${newIndex}`);
+      } catch (error) {
+        console.error(`Error writing file for book ${id}:`, error);
+        throw new ApplicationError(`Failed to save changes: ${error instanceof Error ? error.message : String(error)}`);
+      }
+      
+      console.log(`Returning success response with content length ${bookContent.length}`);
+      return { 
+        success: true, 
+        content: bookContent, 
+        message: `Chapter moved ${direction}`,
+        newIndex: newIndex 
+      };
+    } catch (error) {
+      console.error(`Error reordering chapter:`, error);
+      throw new ApplicationError(`Failed to reorder chapter: ${error instanceof Error ? error.message : String(error)}`);
     }
   }
 }
