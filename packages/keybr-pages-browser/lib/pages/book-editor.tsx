@@ -13,12 +13,13 @@ const styles = {
     margin: "0 auto",
     padding: "10px",
     fontFamily: "Arial, sans-serif",
-    color: "#333",
+    color: "var(--text-color)",
   },
   header: {
     fontSize: "20px",
     marginBottom: "8px",
     fontWeight: "bold",
+    color: "var(--text-color)",
   },
   formGroup: {
     marginBottom: "0px",
@@ -31,21 +32,23 @@ const styles = {
     fontWeight: "bold",
     marginBottom: "2px",
     fontSize: "14px",
+    color: "var(--text-color)",
   },
   select: {
     width: "400px",
     padding: "6px 8px",
     fontSize: "14px",
-    border: "1px solid #ccc",
+    border: "1px solid var(--accent-d1)",
     borderRadius: "4px",
-    backgroundColor: "#fff",
+    backgroundColor: "var(--primary-l1)",
     marginBottom: "5px",
+    color: "var(--text-color)",
   },
   button: {
     padding: "5px 10px",
     fontSize: "14px",
-    backgroundColor: "#4a4a4a",
-    color: "white",
+    backgroundColor: "var(--accent)",
+    color: "var(--primary-l2)",
     border: "none",
     borderRadius: "4px",
     cursor: "pointer",
@@ -54,10 +57,10 @@ const styles = {
     textAlign: "center" as const,
   },
   dangerButton: {
-    backgroundColor: "#d9534f",
+    backgroundColor: "var(--error)",
   },
   successButton: {
-    backgroundColor: "#5cb85c",
+    backgroundColor: "var(--Value--more__color)",
   },
   buttonGroup: {
     display: "flex",
@@ -69,25 +72,29 @@ const styles = {
     minHeight: "200px",
     padding: "6px 8px",
     fontSize: "14px",
-    border: "1px solid #ccc",
+    border: "1px solid var(--accent-d1)",
     borderRadius: "4px",
     fontFamily: "Arial, sans-serif",
     lineHeight: "1.3",
+    backgroundColor: "var(--primary-l1)",
+    color: "var(--text-color)",
   },
   input: {
     width: "400px",
     padding: "6px 8px",
     fontSize: "14px",
-    border: "1px solid #ccc",
+    border: "1px solid var(--accent-d1)",
     borderRadius: "4px",
     marginBottom: "5px",
+    backgroundColor: "var(--primary-l1)",
+    color: "var(--text-color)",
   },
   successMessage: {
     padding: "4px 8px",
-    backgroundColor: "#dff0d8",
-    border: "1px solid #d6e9c6",
+    backgroundColor: "var(--Value--more__color)",
+    border: "1px solid var(--accent-d1)",
     borderRadius: "4px",
-    color: "#3c763d",
+    color: "var(--primary-l2)",
     marginBottom: "8px",
     fontSize: "14px",
   },
@@ -104,7 +111,7 @@ const styles = {
     zIndex: "1000",
   },
   modalContent: {
-    backgroundColor: "white",
+    backgroundColor: "var(--primary)",
     padding: "10px",
     borderRadius: "4px",
     width: "300px",
@@ -114,6 +121,7 @@ const styles = {
     fontSize: "16px",
     marginBottom: "5px",
     fontWeight: "bold",
+    color: "var(--text-color)",
   },
   modalActions: {
     display: "flex",
@@ -124,6 +132,7 @@ const styles = {
   paragraph: {
     fontSize: "13px",
     margin: "0 0 5px 0",
+    color: "var(--text-color)",
   }
 };
 
@@ -140,6 +149,7 @@ export default function BookEditorPage(): React.ReactNode {
   const [deleteSuccess, setDeleteSuccess] = useState(false);
   const [showConfirmDelete, setShowConfirmDelete] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [shouldCleanText, setShouldCleanText] = useState(true);
 
   // Reset success messages after 3 seconds
   useEffect(() => {
@@ -239,20 +249,13 @@ export default function BookEditorPage(): React.ReactNode {
     }
   };
 
-  const handleTextChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
-    setEditedText(e.target.value);
-  };
-
-  const handleTitleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setEditedTitle(e.target.value);
-  };
-
   // New function to clean text by removing timestamps and filler words
   const cleanText = (text: string) => {
     if (!text) return "";
     
-    // Remove timestamps (e.g., [00:05:23] or [5:23])
-    let cleanedText = text.replace(/\[\d+:\d+(?::\d+)?\]/g, "");
+    // Improved timestamp removal - handles various formats:
+    // [00:05:23], [5:23], (01:42), 00:15, [01:42.500], etc.
+    let cleanedText = text.replace(/[\[\(]?\d{1,2}:\d{2}(?::\d{2})?(?:\.\d+)?[\]\)]?/g, "");
     
     // Remove filler words
     const fillerWords = ["um", "uh", "like", "you know", "basically", "actually", "literally"];
@@ -274,22 +277,35 @@ export default function BookEditorPage(): React.ReactNode {
     return cleanedText.trim();
   };
 
+  // Keep the original unedited text separate from the display text
+  const [originalText, setOriginalText] = useState("");
+
+  const handleTextChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    // Just set the text directly - we'll clean it only when saving
+    setEditedText(e.target.value);
+  };
+
+  const handleTitleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setEditedTitle(e.target.value);
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (selectedBookId && currentChapterIndex !== null) {
       setSaving(true);
       try {
-        // Clean the text first to remove timestamps and filler words
-        const cleanedText = cleanText(editedText);
+        // Apply text cleaning before saving, but only if the cleanup option is enabled
+        const textToProcess = shouldCleanText ? cleanText(editedText) : editedText;
+        console.log(`${shouldCleanText ? "Cleaned" : "Processing"} text for saving`);
         
         // Split text on double newlines to create paragraphs
         let paragraphs: string[];
         
-        if (cleanedText.trim() === '') {
+        if (textToProcess.trim() === '') {
           // If text is empty, create a single empty paragraph
           paragraphs = [''];
         } else {
-          paragraphs = cleanedText
+          paragraphs = textToProcess
             .split(/\n\s*\n/)
             .map((p) => p.trim())
             .filter((p) => p !== '');
@@ -340,8 +356,15 @@ export default function BookEditorPage(): React.ReactNode {
   };
 
   const handleAddChapter = useCallback(() => {
+    // Clear out any existing chapter selection and content when adding a new chapter
+    setCurrentChapterIndex(null);
+    setEditedText("");
+    setEditedTitle("");
+    
+    // Show the new chapter form
     setShowNewChapterForm(true);
     setNewChapterTitle("");
+    console.log("Cleared editor for new chapter creation");
   }, []);
 
   const handleCreateChapter = useCallback(async (event: React.FormEvent) => {
@@ -672,16 +695,29 @@ export default function BookEditorPage(): React.ReactNode {
               onChange={handleTextChange}
               disabled={saving}
             />
-            <div style={{ display: "flex", justifyContent: "space-between" }}>
-              <button 
-                type="button" 
-                style={styles.button}
-                onClick={() => setEditedText(cleanText(editedText))}
-                disabled={saving || !editedText.trim()}
-                title="Removes timestamps, filler words (uh, um), and merges lines into paragraphs"
+            <div style={{display: "flex", alignItems: "center", marginBottom: "10px"}}>
+              <input 
+                id="clean-text-checkbox"
+                type="checkbox"
+                checked={shouldCleanText}
+                onChange={(e) => setShouldCleanText(e.target.checked)}
+                style={{marginRight: "5px"}}
+              />
+              <label 
+                htmlFor="clean-text-checkbox" 
+                style={{
+                  fontSize: "13px", 
+                  cursor: "pointer",
+                  color: "var(--text-color)",
+                  fontWeight: "500"
+                }}
+                title="Removes timestamps, filler words, and fixes paragraph formatting"
               >
-                Clean Text
-              </button>
+                Clean up text when saving (removes timestamps, filler words, fixes formatting)
+              </label>
+            </div>
+            <div style={{ display: "flex", justifyContent: "space-between" }}>
+              <div></div> {/* Empty div to maintain layout with flexbox */}
               <button 
                 type="submit" 
                 style={{...styles.button, ...styles.successButton}}
