@@ -3,14 +3,13 @@ import { Context } from "@fastr/core";
 import { ApplicationError } from "@fastr/errors";
 import { injectable } from "@fastr/invert";
 import { type RouterState } from "@fastr/middleware-router";
-import { Book, type Content } from "@keybr/content";
-import * as fs from "node:fs/promises";
+import * as fs from "node:fs";
 import * as path from "node:path";
 import * as zlib from "node:zlib";
 import { promisify } from "node:util";
 import { z } from "zod";
 import { zod } from "../auth/zod.ts";
-import { exec } from "node:child_process";
+import { Book } from "@keybr/content";
 
 const gunzip = promisify(zlib.gunzip);
 const gzip = promisify(zlib.gzip);
@@ -59,37 +58,15 @@ type MockContentMap = {
   [id: string]: BookContent;
 };
 
-// In-memory mock data as a fallback - make it static so it's shared across instances
-const mockContent: MockContentMap = {
-  "en-alice-wonderland": [
-    ["Chapter 1: Down the Rabbit-Hole", [
-      "THIS SHOULD BE UPDATED BY API: Alice was beginning to get very tired of sitting by her sister on the bank, and of having nothing to do.",
-      "So she was considering whether the pleasure of making a daisy-chain would be worth the trouble of getting up and picking the daisies, when suddenly a White Rabbit with pink eyes ran close by her."
-    ]],
-    ["Chapter 2: The Pool of Tears", [
-      "Curiouser and curiouser! cried Alice (she was so much surprised, that for the moment she quite forgot how to speak good English).",
-      "For, you see, so many out-of-the-way things had happened lately, that Alice had begun to think that very few things indeed were really impossible."
-    ]]
-  ],
-  "en-jekyll-hyde": [
-    ["Chapter 1: Story of the Door", [
-      "Mr. Utterson the lawyer was a man of a rugged countenance that was never lighted by a smile; cold, scanty and embarrassed in discourse; backward in sentiment; lean, long, dusty, dreary and yet somehow lovable.",
-      "At friendly meetings, and when the wine was to his taste, something eminently human beaconed from his eye."
-    ]]
-  ],
-  "en-call-wild": [
-    ["Chapter 1: Into the Primitive", [
-      "Buck did not read the newspapers, or he would have known that trouble was brewing, not alone for himself, but for every tide-water dog, strong of muscle and with warm, long hair, from Puget Sound to San Diego.",
-      "Because men, groping in the Arctic darkness, had found a yellow metal, and because steamship and transportation companies were booming the find, thousands of men were rushing into the Northland."
-    ]]
-  ]
-};
+// Initialize empty mock content store
+const mockContent: MockContentMap = {};
 
 @injectable()
 @controller("/_/books")
 export class Controller {
   private readonly dataDir: string;
-  // Add a class property to access mockContent
+  
+  // Use static property to store mock content between requests
   private static mockContentStore = mockContent;
   private static initialized = false;
 
@@ -117,10 +94,10 @@ export class Controller {
         
         try {
           // Check if file exists
-          await fs.access(filePath);
+          await fs.promises.access(filePath);
           
           // Read file content
-          const buffer = await fs.readFile(filePath);
+          const buffer = await fs.promises.readFile(filePath);
           let content;
           
           // Try to decompress if it's gzipped
@@ -178,7 +155,7 @@ export class Controller {
         
         try {
           // Read the file content
-          const buffer = await fs.readFile(filePath);
+          const buffer = await fs.promises.readFile(filePath);
           let content;
           
           // Try to decompress if it's gzipped
@@ -273,21 +250,21 @@ export class Controller {
           
           // Check if the original file was compressed
           try {
-            const originalBuffer = await fs.readFile(contentFilePath);
+            const originalBuffer = await fs.promises.readFile(contentFilePath);
             try {
               await gunzip(originalBuffer);
               // If we get here, original was compressed, so compress the new content too
               const compressed = await gzip(Buffer.from(jsonString, 'utf8'));
-              await fs.writeFile(contentFilePath, compressed);
+              await fs.promises.writeFile(contentFilePath, compressed);
               console.log(`Wrote compressed content for book: ${id}`);
             } catch (error) {
               // Original was not compressed, write plain JSON
-              await fs.writeFile(contentFilePath, jsonString, 'utf8');
+              await fs.promises.writeFile(contentFilePath, jsonString, 'utf8');
               console.log(`Wrote uncompressed content for book: ${id}`);
             }
           } catch (readError) {
             // If the original file doesn't exist, just write a new one
-            await fs.writeFile(contentFilePath, jsonString, 'utf8');
+            await fs.promises.writeFile(contentFilePath, jsonString, 'utf8');
             console.log(`Created new file for book: ${id}`);
           }
         } catch (fileError) {
@@ -334,7 +311,7 @@ export class Controller {
       await this.manageBackup(filePath);
       
       // Read and decompress the file if needed
-      const buffer = await fs.readFile(filePath);
+      const buffer = await fs.promises.readFile(filePath);
       let content;
       let isCompressed = false;
       
@@ -370,7 +347,7 @@ export class Controller {
         dataToWrite = Buffer.from(JSON.stringify(content));
       }
       
-      await fs.writeFile(filePath, dataToWrite);
+      await fs.promises.writeFile(filePath, dataToWrite);
       console.log(`Updated book ${id}, chapter ${chapIdx}, paragraph ${paraIdx}`);
       
       return { 
@@ -413,7 +390,7 @@ export class Controller {
       await this.manageBackup(filePath);
       
       // Read and decompress the file if needed
-      const buffer = await fs.readFile(filePath);
+      const buffer = await fs.promises.readFile(filePath);
       let bookContent;
       let isCompressed = false;
       
@@ -450,7 +427,7 @@ export class Controller {
         dataToWrite = Buffer.from(JSON.stringify(bookContent));
       }
       
-      await fs.writeFile(filePath, dataToWrite);
+      await fs.promises.writeFile(filePath, dataToWrite);
       console.log(`Updated book ${id}, chapter ${chapIdx} with ${content.length} paragraphs`);
       
       return { 
@@ -486,7 +463,7 @@ export class Controller {
       await this.manageBackup(filePath);
       
       // Read and decompress the file if needed
-      const buffer = await fs.readFile(filePath);
+      const buffer = await fs.promises.readFile(filePath);
       let bookContent;
       let isCompressed = false;
       
@@ -522,7 +499,7 @@ export class Controller {
         dataToWrite = Buffer.from(JSON.stringify(bookContent));
       }
       
-      await fs.writeFile(filePath, dataToWrite);
+      await fs.promises.writeFile(filePath, dataToWrite);
       console.log(`Added new chapter to book ${id} at position ${validPosition}: "${title}"`);
       
       return { 
@@ -555,21 +532,26 @@ export class Controller {
     }
 
     try {
+      console.log(`DELETE request received for book ${id}, chapter ${chapterIdx}`);
+      
       // Force re-initialization of content from files to make sure we're in sync
       await this.initializeContentFromFile(id);
       
       // Get content from the store
       let bookContent: BookContent;
       if (Controller.mockContentStore[id] && Array.isArray(Controller.mockContentStore[id])) {
+        console.log(`Book ${id} found in mock store with ${Controller.mockContentStore[id].length} chapters`);
+        // Create a deep copy to avoid reference issues
         bookContent = JSON.parse(JSON.stringify(Controller.mockContentStore[id]));
       } else {
+        console.log(`Book ${id} not found in mock store, initializing empty array`);
         bookContent = [];
         Controller.mockContentStore[id] = [];
       }
       
       // Log the content state
-      console.log(`Book ${id} content before deletion, current chapters:`, bookContent.length);
-      console.log(`Attempting to delete chapter index ${chapterIdx}`);
+      console.log(`Book ${id} content before deletion has ${bookContent.length} chapters`);
+      console.log(`Attempting to delete chapter at index ${chapterIdx}`);
       
       // Validate chapter index
       if (chapterIdx < 0 || chapterIdx >= bookContent.length) {
@@ -579,9 +561,11 @@ export class Controller {
       
       // Save what we're deleting for logs
       const deletedChapter = bookContent[chapterIdx];
+      console.log(`Chapter to be deleted: "${deletedChapter[0]}" with ${deletedChapter[1].length} paragraphs`);
       
-      // Remove the chapter from our content
+      // Remove ONLY the chapter at the specified index
       bookContent.splice(chapterIdx, 1);
+      console.log(`After splice operation, book now has ${bookContent.length} chapters`);
       
       // Update mock content store with a deep copy
       Controller.mockContentStore[id] = JSON.parse(JSON.stringify(bookContent));
@@ -594,12 +578,13 @@ export class Controller {
       
       // Write the updated content to file
       try {
+        console.log(`Writing updated content with ${bookContent.length} chapters to file`);
         const jsonString = JSON.stringify(bookContent, null, 2);
-        await fs.writeFile(contentFilePath, jsonString, 'utf8');
-        console.log(`Chapter deleted: ${JSON.stringify(deletedChapter)}`);
-        console.log(`Book ${id} now has ${bookContent.length} chapters`);
+        await fs.promises.writeFile(contentFilePath, jsonString, 'utf8');
+        console.log(`Chapter deleted successfully. Book ${id} now has ${bookContent.length} chapters`);
       } catch (error) {
         console.error(`Error writing file for book ${id}:`, error);
+        throw new ApplicationError(`Failed to save changes: ${error instanceof Error ? error.message : String(error)}`);
       }
       
       return { 
@@ -620,10 +605,10 @@ export class Controller {
       
       try {
         // Check if file exists
-        await fs.access(filePath);
+        await fs.promises.access(filePath);
         
         // Read file content
-        const buffer = await fs.readFile(filePath);
+        const buffer = await fs.promises.readFile(filePath);
         let content;
         
         // Try to decompress if it's gzipped
@@ -654,28 +639,30 @@ export class Controller {
   }
 
   // Helper method to manage backups - always maintains only one backup
-  private async manageBackup(filePath: string): Promise<void> {
-    const backupPath = `${filePath}.backup`;
-    
+  private async manageBackup(filePath: string): Promise<boolean> {
     try {
-      // Check if the original file exists
-      await fs.access(filePath);
+      const backupPath = `${filePath}.backup`;
       
-      // Always create a fresh backup, removing any existing one first
+      // Check if backup already exists
       try {
-        // Check if backup exists and delete it
-        await fs.access(backupPath);
-        await fs.unlink(backupPath);
-        console.log(`Removed existing backup at ${backupPath}`);
-      } catch (backupNotFound) {
-        // If no backup exists, that's fine - we'll create one
+        await fs.promises.access(backupPath);
+        console.log(`Backup already exists at ${backupPath}, not creating another backup`);
+        return false; // Backup already exists, no new backup created
+      } catch (error) {
+        // Backup doesn't exist, create it if the original file exists
+        try {
+          await fs.promises.access(filePath);
+          await fs.promises.copyFile(filePath, backupPath);
+          console.log(`Created backup at ${backupPath}`);
+          return true; // Successfully created backup
+        } catch (error) {
+          console.log(`No file exists at ${filePath} to back up`);
+          return false;
+        }
       }
-      
-      // Create a fresh backup
-      await fs.copyFile(filePath, backupPath);
-      console.log(`Created backup at ${backupPath}`);
     } catch (error) {
-      console.log(`No existing file at ${filePath} to backup`);
+      console.error(`Error managing backup: ${error}`);
+      return false;
     }
   }
   
@@ -696,24 +683,25 @@ export class Controller {
       
       // Check if backup exists
       try {
-        await fs.access(backupPath);
+        await fs.promises.access(backupPath);
         
         // Copy backup to main file
-        await fs.copyFile(backupPath, contentFilePath);
+        await fs.promises.copyFile(backupPath, contentFilePath);
         
         // Re-initialize content from file
         await this.initializeContentFromFile(id);
         
-        return {
-          success: true,
-          message: `Restored book ${id} from backup`
+        return { 
+          success: true, 
+          message: "Book content restored from backup successfully"
         };
       } catch (error) {
-        throw new ApplicationError(`No backup exists for book ${id}`);
+        console.error(`Error restoring from backup:`, error);
+        throw new ApplicationError(`Failed to restore from backup: ${error instanceof Error ? error.message : String(error)}`);
       }
     } catch (error) {
       console.error(`Error restoring from backup:`, error);
       throw new ApplicationError(`Failed to restore from backup: ${error instanceof Error ? error.message : String(error)}`);
     }
   }
-} 
+}

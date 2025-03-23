@@ -2,6 +2,10 @@ import { Book } from "@keybr/content";
 import * as React from "react";
 import { useState, useCallback, useEffect } from "react";
 
+// Define the BookContent type inline instead of importing it
+type BookContent = Array<[string, string[]]>;
+type Chapter = [string, string[]];
+
 // Custom styles for the Book Editor
 const styles = {
   container: {
@@ -135,6 +139,7 @@ export default function BookEditorPage(): React.ReactNode {
   const [saveSuccess, setSaveSuccess] = useState(false);
   const [deleteSuccess, setDeleteSuccess] = useState(false);
   const [showConfirmDelete, setShowConfirmDelete] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   // Reset success messages after 3 seconds
   useEffect(() => {
@@ -159,6 +164,22 @@ export default function BookEditorPage(): React.ReactNode {
       
       const data = await response.json();
       console.log("Book content loaded:", data.content?.length || 0, "chapters");
+      
+      // Validate the content structure
+      if (!data.content || !Array.isArray(data.content)) {
+        console.error("Invalid book content structure - content is not an array:", data);
+        return null;
+      }
+
+      // Log first chapter as a sample to verify structure
+      if (data.content.length > 0) {
+        const firstChapter = data.content[0];
+        console.log("First chapter structure:", {
+          title: firstChapter[0],
+          paragraphCount: Array.isArray(firstChapter[1]) ? firstChapter[1].length : 'not an array'
+        });
+      }
+      
       setBookContent(data);
       
       // If we had a chapter selected but it no longer exists, reset selection
@@ -166,6 +187,7 @@ export default function BookEditorPage(): React.ReactNode {
         console.log("Selected chapter no longer exists, resetting selection");
         setCurrentChapterIndex(null);
         setEditedText("");
+        setEditedTitle("");
       }
       
       return data;
@@ -177,29 +199,43 @@ export default function BookEditorPage(): React.ReactNode {
 
   const handleBookSelect = useCallback((event: React.ChangeEvent<HTMLSelectElement>) => {
     const value = event.target.value;
+    console.log(`Book selected: ${value}`);
     setSelectedBookId(value);
+    // Reset chapter selection when changing books
+    setCurrentChapterIndex(null);
+    setEditedText("");
+    setEditedTitle("");
     fetchBookContent(value);
   }, [fetchBookContent]);
 
   const handleChapterSelect = (e: React.ChangeEvent<HTMLSelectElement>) => {
     const index = e.target.value === '' ? null : parseInt(e.target.value, 10);
-    setCurrentChapterIndex(index);
+    console.log(`Chapter selected from dropdown: ${index}`);
     
-    if (index !== null && bookContent?.content[index]) {
+    if (index !== null && bookContent?.content?.[index]) {
+      setCurrentChapterIndex(index);
+      
       // Set the chapter title
-      setEditedTitle(bookContent.content[index][0]);
+      const title = bookContent.content[index][0] || '';
+      setEditedTitle(title);
+      console.log(`Setting chapter title: "${title}"`);
       
       const chapterContent = bookContent.content[index][1];
       // Handle empty content cases properly
       if (Array.isArray(chapterContent) && chapterContent.length > 0) {
-        setEditedText(chapterContent.join('\n\n'));
+        const text = chapterContent.join('\n\n');
+        setEditedText(text);
+        console.log(`Setting chapter content: ${chapterContent.length} paragraphs`);
       } else {
         // Handle empty chapter with empty string
         setEditedText('');
+        console.log(`Chapter has no content, setting empty text`);
       }
     } else {
+      setCurrentChapterIndex(null);
       setEditedTitle('');
       setEditedText('');
+      console.log(`No chapter selected or invalid index, clearing editor`);
     }
   };
 
@@ -212,26 +248,30 @@ export default function BookEditorPage(): React.ReactNode {
   };
 
   // New function to clean text by removing timestamps and filler words
-  const cleanText = (text: string): string => {
-    // Remove timestamps in various formats from the beginning of lines
-    // Matches formats like "0:14", "1:23:45", "[00:14]", "(1:23)", etc.
-    let cleaned = text.replace(/^\s*[\[\(\{]?\d+:?\d+(?::\d+)?[\]\)\}]?\s*/gm, '');
+  const cleanText = (text: string) => {
+    if (!text) return "";
     
-    // Remove filler words - common speech disfluencies
-    cleaned = cleaned.replace(/\b(um|uh|uhh|hmm|err|like|you know|sort of|kind of|basically|actually|literally|so yeah|right|okay)\b/gi, '');
+    // Remove timestamps (e.g., [00:05:23] or [5:23])
+    let cleanedText = text.replace(/\[\d+:\d+(?::\d+)?\]/g, "");
     
-    // Special case for timestamps that might appear in the middle of a line
-    // This is more aggressive and should be used with caution
-    cleaned = cleaned.replace(/\s+[\[\(\{]?\d+:?\d+(?::\d+)?[\]\)\}]?\s+/g, ' ');
+    // Remove filler words
+    const fillerWords = ["um", "uh", "like", "you know", "basically", "actually", "literally"];
+    fillerWords.forEach(word => {
+      cleanedText = cleanedText.replace(new RegExp(`\\b${word}\\b`, "gi"), "");
+    });
     
-    // Merge lines that were previously separated by timestamps
-    // by replacing single newlines with spaces, preserving paragraph breaks (double newlines)
-    cleaned = cleaned.replace(/([^\n])\n([^\n])/g, '$1 $2');
+    // Fix line breaks - convert multiple empty lines to single line breaks
+    cleanedText = cleanedText.replace(/\n{3,}/g, "\n\n");
     
-    // Clean up any extra spaces that might have been created
-    cleaned = cleaned.replace(/\s{2,}/g, ' ').trim();
+    // Merge text that was broken across lines but should be a single paragraph
+    // If a line doesn't end with a period, question mark, exclamation point, or colon,
+    // and the next line doesn't start with a bullet or number, join them
+    cleanedText = cleanedText.replace(/([^.!?:])\n(?![•\-\d\n])/g, "$1 ");
     
-    return cleaned;
+    // Replace multiple spaces with a single space
+    cleanedText = cleanedText.replace(/ {2,}/g, " ");
+    
+    return cleanedText.trim();
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -260,6 +300,8 @@ export default function BookEditorPage(): React.ReactNode {
           }
         }
         
+        console.log(`Saving chapter ${currentChapterIndex} with title "${editedTitle}" and ${paragraphs.length} paragraphs`);
+        
         const response = await fetch(`/_/books/${selectedBookId}/chapter/${currentChapterIndex}`, {
           method: 'PUT',
           headers: {
@@ -284,6 +326,7 @@ export default function BookEditorPage(): React.ReactNode {
             ...bookContent,
             content: updatedContent,
           });
+          console.log(`Updated local state with saved content`);
         }
         
         setSaveSuccess(true);
@@ -341,12 +384,18 @@ export default function BookEditorPage(): React.ReactNode {
       // Select the newly created chapter if the refresh was successful
       if (updatedBook && updatedBook.content) {
         setCurrentChapterIndex(position);
+        console.log(`New chapter created at index ${position}`);
         
         // Initialize with empty text for the new chapter
         if (updatedBook.content[position] && Array.isArray(updatedBook.content[position][1])) {
-          setEditedText(updatedBook.content[position][1].join('\n\n'));
+          const chapterText = updatedBook.content[position][1].join('\n\n');
+          setEditedText(chapterText);
+          setEditedTitle(updatedBook.content[position][0] || '');
+          console.log(`Initialized editor with new chapter content`);
         } else {
           setEditedText('');
+          setEditedTitle(newChapterTitle);
+          console.log(`Initialized editor with empty content for new chapter`);
         }
       }
       
@@ -363,51 +412,87 @@ export default function BookEditorPage(): React.ReactNode {
     setShowNewChapterForm(false);
   }, []);
 
-  const handleDeleteChapter = async () => {
-    if (selectedBookId === null || currentChapterIndex === null) {
-      console.log("Nothing selected to delete");
-      return false;
-    }
+  const handleDeleteChapter = async (index: number) => {
+    if (!bookContent || isDeleting) return;
 
-    setSaving(true);
     try {
-      console.log(`Attempting to delete chapter ${currentChapterIndex} from book ${selectedBookId}`);
-      
-      // Send DELETE request to the server
-      const response = await fetch(`/_/books/${selectedBookId}/chapter/${currentChapterIndex}`, {
-        method: 'DELETE',
+      setIsDeleting(true);
+      console.log(`Attempting to delete chapter at index ${index}`);
+      const response = await fetch(`/_/books/${selectedBookId}/chapter/${index}`, {
+        method: "DELETE",
       });
 
       if (!response.ok) {
-        const errorText = await response.text();
-        console.error("Delete chapter failed:", response.status, errorText);
+        const errorData = await response.json();
+        console.error("Failed to delete chapter:", errorData);
         
-        // If the error is about index out of range, we need to refresh our data
-        if (errorText.includes("index out of range") || errorText.includes("no chapters")) {
-          console.log("Content mismatch detected, refreshing from server");
-          await fetchBookContent(selectedBookId);
+        // Check if it's an "index out of range" error
+        if (errorData.error && errorData.error.includes("index out of range")) {
+          console.log("Index out of range error detected, refreshing book content");
+          // Refresh the book content from the server
+          const refreshResponse = await fetch(`/_/books/${selectedBookId}`);
+          if (refreshResponse.ok) {
+            const refreshedBook = await refreshResponse.json();
+            setBookContent(refreshedBook);
+            console.log("Book content refreshed from server");
+            
+            // Reset selection if the current selection is invalid
+            if (currentChapterIndex === index || currentChapterIndex === null) {
+              setCurrentChapterIndex(null);
+              setEditedText("");
+              setEditedTitle("");
+              console.log(`Reset selection after index out of range error`);
+            }
+          }
         }
-        
-        throw new Error(`Failed to delete chapter: ${response.statusText}`);
+        return;
       }
 
-      console.log("Chapter deleted successfully, refreshing content");
-      // Always refresh content after a successful deletion
-      await fetchBookContent(selectedBookId);
-      
-      // Reset UI state
-      setCurrentChapterIndex(null);
-      setEditedText("");
-      setShowConfirmDelete(false);
+      const result = await response.json();
+      console.log("Delete chapter result:", result);
+
+      // Wait briefly before refreshing to ensure the server has completed the operation
+      await new Promise(resolve => setTimeout(resolve, 500));
+
+      // Refresh the book content after deletion
+      const refreshResponse = await fetch(`/_/books/${selectedBookId}`);
+      const refreshedBook = await refreshResponse.json();
+      setBookContent(refreshedBook);
+      console.log(`Refreshed book content after deletion, now has ${refreshedBook.content?.length || 0} chapters`);
+
+      // Reset selection if the deleted chapter was selected
+      if (currentChapterIndex === index) {
+        setCurrentChapterIndex(null);
+        setEditedText("");
+        setEditedTitle("");
+        console.log(`Deleted the currently selected chapter, clearing selection`);
+      }
+      // If the selected chapter is after the deleted one, decrement the index
+      else if (currentChapterIndex !== null && currentChapterIndex > index) {
+        const newIndex = currentChapterIndex - 1;
+        setCurrentChapterIndex(newIndex);
+        console.log(`Adjusted selection index to ${newIndex} after deletion`);
+        
+        // Update the text and title to match the new selection
+        if (refreshedBook.content && refreshedBook.content[newIndex]) {
+          const chapter = refreshedBook.content[newIndex];
+          setEditedTitle(chapter[0]);
+          setEditedText(chapter[1].join('\n\n'));
+          console.log(`Updated editor content for adjusted chapter selection`);
+        }
+      }
+
+      // Show delete success message
       setDeleteSuccess(true);
       setTimeout(() => setDeleteSuccess(false), 3000);
       
-      return true;
+      // Close the confirmation dialog
+      setShowConfirmDelete(false);
+
     } catch (error) {
       console.error("Error deleting chapter:", error);
-      return false;
     } finally {
-      setSaving(false);
+      setIsDeleting(false);
     }
   };
 
@@ -415,6 +500,15 @@ export default function BookEditorPage(): React.ReactNode {
     setShowConfirmDelete(false);
   }, []);
 
+  useEffect(() => {
+    // Load the selected book data when component mounts or book changes
+    if (selectedBookId) {
+      console.log(`Loading book content for ${selectedBookId}`);
+      fetchBookContent(selectedBookId);
+    }
+  }, [selectedBookId, fetchBookContent]);
+
+  // Return the JSX for the component
   return (
     <div style={styles.container}>
       <h1 style={styles.header}>Book Editor</h1>
@@ -510,7 +604,7 @@ export default function BookEditorPage(): React.ReactNode {
               <button 
                 type="button" 
                 style={{...styles.button, ...styles.dangerButton}}
-                onClick={handleDeleteChapter}
+                onClick={() => handleDeleteChapter(currentChapterIndex || 0)}
                 disabled={saving}
               >
                 Delete
